@@ -10,7 +10,6 @@ new class extends Component
     public Series $series;
     public $currentMatchIndex = 0;
     
-    public $champions = [];
     public $search = '';
     public $selectedRole = '';
 
@@ -43,7 +42,11 @@ new class extends Component
     {
         $this->series = $series;
         $this->series->load('matches');
-        $this->champions = Champion::orderBy('name')->get()->toArray();
+    }
+
+    public function getChampionsProperty()
+    {
+        return Champion::all()->keyBy('id');
     }
 
     public function selectRole($role)
@@ -222,29 +225,29 @@ new class extends Component
         $this->series->load('matches');
     }
 
-    public function getPreviousBansForTeam($teamName)
+    public function getPreviousPicksForTeam($teamName)
     {
-        $bansByGame = [];
+        $picksByGame = [];
         foreach ($this->matches as $index => $match) {
             if ($index < $this->currentMatchIndex && $match->status === 'completed') {
                 $isTeamABlue = $index % 2 === 0;
-                $teamABanList = $isTeamABlue ? $match->blue_bans : $match->red_bans;
-                $teamBBanList = $isTeamABlue ? $match->red_bans : $match->blue_bans;
+                $teamAPickList = $isTeamABlue ? $match->blue_picks : $match->red_picks;
+                $teamBPickList = $isTeamABlue ? $match->red_picks : $match->blue_picks;
 
                 if ($this->series->team_a_name === $teamName) {
-                    $bansByGame[] = [
+                    $picksByGame[] = [
                         'game' => $index + 1,
-                        'bans' => $teamABanList ?? []
+                        'picks' => $teamAPickList ?? []
                     ];
                 } else {
-                    $bansByGame[] = [
+                    $picksByGame[] = [
                         'game' => $index + 1,
-                        'bans' => $teamBBanList ?? []
+                        'picks' => $teamBPickList ?? []
                     ];
                 }
             }
         }
-        return $bansByGame;
+        return $picksByGame;
     }
 
     public function getTeamWins($teamName)
@@ -309,125 +312,27 @@ new class extends Component
         $isMatchCompleted = $match && $match->status === 'completed';
     @endphp
 
-    @if($this->isSeriesOver)
-        <div class="mb-6 p-4 bg-yellow-900/50 border border-yellow-700 rounded-lg text-center shadow-lg">
-            <h2 class="text-2xl font-bold text-yellow-500 mb-2">🎉 Série Finalizada! 🎉</h2>
-            <p class="text-white text-lg">A equipe <span class="font-bold">{{ $series->winner_team === 'team_a' ? $series->team_a_name : $series->team_b_name }}</span> venceu a série!</p>
-        </div>
-    @elseif($isMatchCompleted && !$match->winner_team)
-        <div class="mb-6 p-6 bg-gray-800 border border-indigo-500 rounded-lg shadow-2xl text-center relative overflow-hidden">
-            <div class="absolute inset-0 bg-gradient-to-r from-blue-900/20 to-red-900/20 z-0"></div>
-            <div class="relative z-10">
-                <h2 class="text-2xl font-bold text-white mb-4">Fim do Jogo {{ $match->match_number }}</h2>
-                <p class="text-gray-300 mb-6">Selecione qual equipe venceu esta partida para continuar:</p>
-                <div class="flex justify-center space-x-6">
-                    <button wire:click="setWinner('team_a')" class="px-6 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-lg transition transform hover:scale-105">
-                        🏆 Vitória: {{ $series->team_a_name }}
-                    </button>
-                    <button wire:click="setWinner('team_b')" class="px-6 py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg transition transform hover:scale-105">
-                        🏆 Vitória: {{ $series->team_b_name }}
-                    </button>
-                </div>
-            </div>
-        </div>
-    @elseif($isMatchCompleted && $match->winner_team)
-        <div class="mb-6 p-4 bg-green-900/30 border border-green-800 rounded-lg text-center flex flex-col items-center justify-center space-y-2">
-            <p class="text-green-400 font-bold">Vitória de {{ $match->winner_team === 'team_a' ? $series->team_a_name : $series->team_b_name }} neste jogo.</p>
-            
-            <button wire:click="undoLastTurn" class="px-3 py-1 bg-red-900/50 hover:bg-red-800/60 border border-red-700 text-red-200 text-xs rounded transition flex items-center space-x-1 font-semibold uppercase tracking-wider">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h10a8 8 0 018 8v2M3 10l6 6m-6-6l6-6"></path></svg>
-                <span>Resetar Vencedor e Voltar ao Draft</span>
-            </button>
-        </div>
-    @endif
+    <x-draft-status-banner 
+        :isSeriesOver="$this->isSeriesOver" 
+        :series="$series" 
+        :match="$match" 
+        :currentTurn="$currentTurn" 
+        :isMatchCompleted="$isMatchCompleted" 
+    />
 
     @if($match)
     <div class="grid grid-cols-12 gap-4 h-0 flex-grow overflow-hidden">
         <!-- BLUE SIDE -->
-        <div class="col-span-3 bg-gray-900 border border-blue-900 rounded-lg p-3 shadow-xl flex flex-col space-y-3 overflow-y-auto custom-scrollbar">
-            <h2 class="text-blue-500 font-bold text-2xl mb-1 text-center">{{ $this->blueTeamName }}</h2>
-            
-            @php
-                $wins = $this->getTeamWins($this->blueTeamName);
-                $totalDots = $series->type === 'bo3' ? 2 : 3;
-            @endphp
-            <div class="flex justify-center space-x-2 mb-2">
-                @for($i = 0; $i < $totalDots; $i++)
-                    <div class="w-3 h-3 rounded-full border-2 {{ $i < $wins ? 'bg-blue-500 border-blue-400 shadow-[0_0_8px_rgba(59,130,246,0.8)]' : 'bg-gray-800 border-gray-700' }}"></div>
-                @endfor
-            </div>
-
-            <div class="text-gray-400 text-sm mb-2 text-center">BLUE SIDE</div>
-            
-            <!-- Bans -->
-            <div class="flex justify-between mb-2 space-x-1 px-2">
-                @for($i = 0; $i < 5; $i++)
-                    @php 
-                        $bans = $match->blue_bans ?? [];
-                        $banId = $bans[$i] ?? null; 
-                    @endphp
-                    <div class="w-9 h-9 bg-gray-800 border-2 {{ $currentTurn && $currentTurn['team'] === 'blue' && $currentTurn['action'] === 'ban' && count($bans) === $i ? 'border-blue-500 animate-pulse' : 'border-gray-700' }} rounded flex items-center justify-center overflow-hidden grayscale">
-                        @if($banId)
-                            @php $champ = collect($champions)->firstWhere('id', $banId); @endphp
-                            <img src="{{ $champ['image_url'] }}" alt="{{ $champ['name'] }}" class="w-full h-full object-cover">
-                        @endif
-                    </div>
-                @endfor
-            </div>
-
-            <!-- Picks (Blue) — imagem à esquerda, nome à direita -->
-            <div class="space-y-2">
-                @for($i = 0; $i < 5; $i++)
-                    @php 
-                        $picks = $match->blue_picks ?? [];
-                        $pickId = $picks[$i] ?? null;
-                        $isActivePick = $currentTurn && $currentTurn['team'] === 'blue' && $currentTurn['action'] === 'pick' && count($picks) === $i;
-                    @endphp
-                    <div class="h-[48px] bg-gray-800 border {{ $isActivePick ? 'border-blue-500 animate-pulse' : 'border-gray-700' }} rounded overflow-hidden flex items-center">
-                        @if($pickId)
-                            @php $champ = collect($champions)->firstWhere('id', $pickId); @endphp
-                            {{-- Imagem à esquerda com largura fixa --}}
-                            <img src="{{ $champ['image_url'] }}" alt="{{ $champ['name'] }}" class="h-full w-12 object-cover flex-shrink-0">
-                            {{-- Nome ao lado --}}
-                            <span class="ml-2 font-bold text-sm text-white truncate flex-1">{{ $champ['name'] }}</span>
-                            {{-- Estrela de prioridade à direita --}}
-                            @if(in_array($pickId, $match->priorities_selected ?? []))
-                                <span class="mr-2 text-yellow-500 flex-shrink-0">
-                                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>
-                                </span>
-                            @endif
-                        @endif
-                    </div>
-                @endfor
-            </div>
-
-            <!-- Bans de Jogos Anteriores -->
-            @php
-                $prevBans = $this->getPreviousBansForTeam($this->blueTeamName);
-            @endphp
-            @if(!empty($prevBans))
-                <div class="mt-3 pt-2 border-t border-gray-800 flex-shrink-0">
-                    <div class="text-xs text-gray-500 font-semibold mb-2 uppercase tracking-wider text-center">Bans Anteriores</div>
-                    <div class="space-y-2">
-                        @foreach($prevBans as $pb)
-                            <div class="bg-gray-950/40 p-2 rounded border border-gray-800/80">
-                                <div class="text-[10px] text-gray-500 font-bold mb-1">JOGO {{ $pb['game'] }}</div>
-                                <div class="flex space-x-1 justify-center">
-                                    @foreach($pb['bans'] as $banId)
-                                        @php $champ = collect($champions)->firstWhere('id', $banId); @endphp
-                                        @if($champ)
-                                            <div class="w-7 h-7 rounded overflow-hidden border border-gray-700/50 grayscale" title="{{ $champ['name'] }}">
-                                                <img src="{{ $champ['image_url'] }}" alt="{{ $champ['name'] }}" class="w-full h-full object-cover">
-                                            </div>
-                                        @endif
-                                    @endforeach
-                                </div>
-                            </div>
-                        @endforeach
-                    </div>
-                </div>
-            @endif
-        </div>
+        <x-draft-team-panel 
+            side="blue" 
+            :teamName="$this->blueTeamName" 
+            :wins="$this->getTeamWins($this->blueTeamName)"
+            :totalDots="$series->type === 'bo3' ? 2 : 3"
+            :match="$match"
+            :currentTurn="$currentTurn"
+            :champions="$this->champions"
+            :prevPicks="$this->getPreviousPicksForTeam($this->blueTeamName)"
+        />
 
         <!-- CENTER GALLERY -->
         <div class="col-span-6 bg-gray-900 border border-gray-800 rounded-lg p-4 shadow-xl flex flex-col overflow-hidden">
@@ -509,90 +414,16 @@ new class extends Component
         </div>
 
         <!-- RED SIDE -->
-        <div class="col-span-3 bg-gray-900 border border-red-900 rounded-lg p-3 shadow-xl flex flex-col space-y-3 overflow-y-auto custom-scrollbar">
-            <h2 class="text-red-500 font-bold text-2xl mb-1 text-center">{{ $this->redTeamName }}</h2>
-            
-            @php
-                $wins = $this->getTeamWins($this->redTeamName);
-                $totalDots = $series->type === 'bo3' ? 2 : 3;
-            @endphp
-            <div class="flex justify-center space-x-2 mb-2">
-                @for($i = 0; $i < $totalDots; $i++)
-                    <div class="w-3 h-3 rounded-full border-2 {{ $i < $wins ? 'bg-red-500 border-red-400 shadow-[0_0_8px_rgba(239,68,68,0.8)]' : 'bg-gray-800 border-gray-700' }}"></div>
-                @endfor
-            </div>
-
-            <div class="text-gray-400 text-sm mb-2 text-center">RED SIDE</div>
-            
-            <!-- Bans -->
-            <div class="flex justify-between mb-2 space-x-1 px-2">
-                @for($i = 0; $i < 5; $i++)
-                    @php 
-                        $bans = $match->red_bans ?? [];
-                        $banId = $bans[$i] ?? null; 
-                    @endphp
-                    <div class="w-9 h-9 bg-gray-800 border-2 {{ $currentTurn && $currentTurn['team'] === 'red' && $currentTurn['action'] === 'ban' && count($bans) === $i ? 'border-red-500 animate-pulse' : 'border-gray-700' }} rounded flex items-center justify-center overflow-hidden grayscale">
-                        @if($banId)
-                            @php $champ = collect($champions)->firstWhere('id', $banId); @endphp
-                            <img src="{{ $champ['image_url'] }}" alt="{{ $champ['name'] }}" class="w-full h-full object-cover">
-                        @endif
-                    </div>
-                @endfor
-            </div>
-
-            <!-- Picks (Red) — nome à esquerda, imagem à direita -->
-            <div class="space-y-2">
-                @for($i = 0; $i < 5; $i++)
-                    @php 
-                        $picks = $match->red_picks ?? [];
-                        $pickId = $picks[$i] ?? null;
-                        $isActivePick = $currentTurn && $currentTurn['team'] === 'red' && $currentTurn['action'] === 'pick' && count($picks) === $i;
-                    @endphp
-                    <div class="h-[48px] bg-gray-800 border {{ $isActivePick ? 'border-red-500 animate-pulse' : 'border-gray-700' }} rounded overflow-hidden flex items-center">
-                        @if($pickId)
-                            @php $champ = collect($champions)->firstWhere('id', $pickId); @endphp
-                            {{-- Estrela de prioridade à esquerda --}}
-                            @if(in_array($pickId, $match->priorities_selected ?? []))
-                                <span class="ml-2 text-yellow-500 flex-shrink-0">
-                                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>
-                                </span>
-                            @endif
-                            {{-- Nome à esquerda --}}
-                            <span class="mr-2 font-bold text-sm text-white truncate flex-1 text-right {{ in_array($pickId, $match->priorities_selected ?? []) ? 'ml-1' : 'ml-2' }}">{{ $champ['name'] }}</span>
-                            {{-- Imagem à direita com largura fixa --}}
-                            <img src="{{ $champ['image_url'] }}" alt="{{ $champ['name'] }}" class="h-full w-12 object-cover flex-shrink-0">
-                        @endif
-                    </div>
-                @endfor
-            </div>
-
-            <!-- Bans de Jogos Anteriores -->
-            @php
-                $prevBans = $this->getPreviousBansForTeam($this->redTeamName);
-            @endphp
-            @if(!empty($prevBans))
-                <div class="mt-3 pt-2 border-t border-gray-800 flex-shrink-0">
-                    <div class="text-xs text-gray-500 font-semibold mb-2 uppercase tracking-wider text-center">Bans Anteriores</div>
-                    <div class="space-y-2">
-                        @foreach($prevBans as $pb)
-                            <div class="bg-gray-950/40 p-2 rounded border border-gray-800/80">
-                                <div class="text-[10px] text-gray-500 font-bold mb-1">JOGO {{ $pb['game'] }}</div>
-                                <div class="flex space-x-1 justify-center">
-                                    @foreach($pb['bans'] as $banId)
-                                        @php $champ = collect($champions)->firstWhere('id', $banId); @endphp
-                                        @if($champ)
-                                            <div class="w-7 h-7 rounded overflow-hidden border border-gray-700/50 grayscale" title="{{ $champ['name'] }}">
-                                                <img src="{{ $champ['image_url'] }}" alt="{{ $champ['name'] }}" class="w-full h-full object-cover">
-                                            </div>
-                                        @endif
-                                    @endforeach
-                                </div>
-                            </div>
-                        @endforeach
-                    </div>
-                </div>
-            @endif
-        </div>
+        <x-draft-team-panel 
+            side="red" 
+            :teamName="$this->redTeamName" 
+            :wins="$this->getTeamWins($this->redTeamName)"
+            :totalDots="$series->type === 'bo3' ? 2 : 3"
+            :match="$match"
+            :currentTurn="$currentTurn"
+            :champions="$this->champions"
+            :prevPicks="$this->getPreviousPicksForTeam($this->redTeamName)"
+        />
     </div>
     @endif
 </div>

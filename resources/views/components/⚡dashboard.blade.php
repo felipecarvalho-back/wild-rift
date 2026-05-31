@@ -11,6 +11,14 @@ new class extends Component
             'recentSeries' => Series::orderBy('created_at', 'desc')->get()
         ];
     }
+
+    public function deleteSeries($id)
+    {
+        $series = Series::find($id);
+        if ($series) {
+            $series->delete();
+        }
+    }
 };
 ?>
 
@@ -55,11 +63,16 @@ new class extends Component
                             </div>
                         </div>
                         
-                        <div class="flex space-x-2">
+                        <div class="flex items-center space-x-2">
                             @if($series->status !== 'completed' && !$series->winner_team)
-                                <a href="{{ route('series.draft', ['series' => $series->id]) }}" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded transition">Continuar Draft</a>
+                                <a href="{{ route('series.draft', ['series' => $series->id]) }}" class="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-semibold rounded-lg transition">Continuar Draft</a>
                             @endif
-                            <a href="{{ route('series.summary', ['series' => $series->id]) }}" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm font-semibold rounded transition">Ver Resumo</a>
+                            <a href="{{ route('series.summary', ['series' => $series->id]) }}" class="px-4 py-2 bg-gray-750 hover:bg-gray-700 text-white text-sm font-semibold rounded-lg transition border border-gray-700">Ver Resumo</a>
+                            <button wire:click="deleteSeries({{ $series->id }})" wire:confirm="Tem certeza de que deseja excluir esta série e todas as suas partidas?" class="p-2 bg-red-950/20 hover:bg-red-600 hover:text-white text-red-400 border border-red-900/40 rounded-lg transition cursor-pointer" title="Excluir Série">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                            </button>
                         </div>
                     </div>
                 @endforeach
