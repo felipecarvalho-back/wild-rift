@@ -12,7 +12,8 @@ new class extends Component
     public function mount(Series $series)
     {
         $this->series = $series;
-        $this->championsMap = Champion::all()->keyBy('id')->toArray();
+        $this->series->load('matches');
+        $this->championsMap = Champion::select(['id', 'name', 'image_url'])->get()->keyBy('id')->toArray();
     }
 };
 ?>

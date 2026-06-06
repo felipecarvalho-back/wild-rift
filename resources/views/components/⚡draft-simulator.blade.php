@@ -12,6 +12,8 @@ new class extends Component
     
     public $search = '';
     public $selectedRole = '';
+    
+    protected $championsCache = null;
 
     const TURNS = [
         // Fase 1: 3 Bans, 3 Picks (1-2-2-1)
@@ -46,7 +48,15 @@ new class extends Component
 
     public function getChampionsProperty()
     {
-        return Champion::all()->keyBy('id');
+        if ($this->championsCache === null) {
+            $this->championsCache = Champion::select(['id', 'name', 'role', 'secondary_role', 'image_url', 'is_priority'])
+                ->orderBy('is_priority', 'desc')
+                ->orderBy('name', 'asc')
+                ->get()
+                ->keyBy('id')
+                ->toArray();
+        }
+        return $this->championsCache;
     }
 
     public function selectRole($role)
@@ -57,20 +67,23 @@ new class extends Component
 
     public function getFilteredChampionsProperty()
     {
-        $query = Champion::orderBy('is_priority', 'desc')->orderBy('name', 'asc');
+        $collection = collect($this->champions);
 
         if ($this->search) {
-            $query->where('name', 'like', '%' . $this->search . '%');
-        }
-
-        if ($this->selectedRole) {
-            $query->where(function($q) {
-                $q->where('role', $this->selectedRole)
-                  ->orWhere('secondary_role', 'like', '%' . $this->selectedRole . '%');
+            $searchTerm = mb_strtolower($this->search);
+            $collection = $collection->filter(function ($champ) use ($searchTerm) {
+                return str_contains(mb_strtolower($champ['name']), $searchTerm);
             });
         }
 
-        return $query->get()->toArray();
+        if ($this->selectedRole) {
+            $role = $this->selectedRole;
+            $collection = $collection->filter(function ($champ) use ($role) {
+                return $champ['role'] === $role || str_contains($champ['secondary_role'] ?? '', $role);
+            });
+        }
+
+        return $collection->values()->toArray();
     }
 
     public function getMatchesProperty()
@@ -169,7 +182,7 @@ new class extends Component
         
         $match->current_turn_index++;
         
-        $champ = collect($this->champions)->firstWhere('id', $championId);
+        $champ = $this->champions[$championId] ?? null;
         if ($champ && $champ['is_priority'] && $currentTurn['action'] === 'pick') {
             $prio = $match->priorities_selected ?? [];
             if (!in_array($championId, $prio)) {
@@ -371,7 +384,7 @@ new class extends Component
                     
                     <!-- Filtros -->
                     <div class="space-y-2">
-                        <input type="text" wire:model.live="search" placeholder="Pesquisar campeão..." class="w-full bg-gray-800 border border-gray-700 text-white px-3 py-2 rounded text-sm focus:outline-none focus:border-indigo-500 placeholder-gray-500">
+                        <input type="text" wire:model.live.debounce.200ms="search" placeholder="Pesquisar campeão..." class="w-full bg-gray-800 border border-gray-700 text-white px-3 py-2 rounded text-sm focus:outline-none focus:border-indigo-500 placeholder-gray-500">
                         
                         <div class="flex space-x-1">
                             <button wire:click="selectRole('')" class="flex-1 py-1.5 rounded text-xs font-semibold uppercase tracking-wider transition-colors {{ $selectedRole === '' ? 'bg-indigo-600 text-white' : 'bg-gray-800 text-gray-400 hover:bg-gray-700' }}">Todos</button>

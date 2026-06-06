@@ -28,7 +28,7 @@ new class extends Component
 
     public function with()
     {
-        $query = Champion::query();
+        $query = Champion::select(['id', 'name', 'role', 'secondary_role', 'image_url', 'is_priority']);
         
         if ($this->search) {
             $query->where('name', 'like', '%' . $this->search . '%');
@@ -132,7 +132,7 @@ new class extends Component
     <div class="bg-gray-900 border border-gray-800 rounded-xl p-6 shadow-xl mb-8">
         <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <div class="flex-1">
-                <input wire:model.live="search" type="text" placeholder="Buscar campeão pelo nome..." class="w-full bg-gray-800 border border-gray-700 text-white px-4 py-2 rounded-lg focus:outline-none focus:border-blue-500">
+                <input wire:model.live.debounce.250ms="search" type="text" placeholder="Buscar campeão pelo nome..." class="w-full bg-gray-800 border border-gray-700 text-white px-4 py-2 rounded-lg focus:outline-none focus:border-blue-500">
             </div>
             
             <div class="flex space-x-2">
