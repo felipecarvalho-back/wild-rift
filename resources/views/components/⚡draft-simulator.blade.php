@@ -196,6 +196,9 @@ new class extends Component
         }
         
         $match->save();
+
+        $this->selectedRole = '';
+        $this->search = '';
     }
 
     public function undoLastTurn()
