@@ -5,6 +5,7 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: wild_rift_app
+    restart: unless-stopped
     ports:
       - "8000:8000"
     volumes:
@@ -24,6 +25,7 @@ services:
   db:
     image: mysql:8.0
     container_name: wild_rift_db
+    restart: unless-stopped
     ports:
       - "3307:3306"
     environment:
