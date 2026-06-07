@@ -48,15 +48,14 @@ new class extends Component
 
     public function getChampionsProperty()
     {
-        if ($this->championsCache === null) {
-            $this->championsCache = Champion::select(['id', 'name', 'role', 'secondary_role', 'image_url', 'is_priority'])
+        return \Illuminate\Support\Facades\Cache::remember('champions_list_all', 3600, function () {
+            return Champion::select(['id', 'name', 'role', 'secondary_role', 'image_url', 'is_priority'])
                 ->orderBy('is_priority', 'desc')
                 ->orderBy('name', 'asc')
                 ->get()
                 ->keyBy('id')
                 ->toArray();
-        }
-        return $this->championsCache;
+        });
     }
 
     public function selectRole($role)
@@ -304,7 +303,8 @@ new class extends Component
                     @php
                         $isLocked = $index > 0 && $this->matches[$index - 1]->status !== 'completed';
                     @endphp
-                    <button wire:click="setMatch({{ $index }})" 
+                    <button wire:key="match-btn-{{ $index }}"
+                            wire:click="setMatch({{ $index }})" 
                             @disabled($isLocked || $this->isSeriesOver)
                             class="px-3 py-1 rounded text-sm {{ $currentMatchIndex === $index ? 'bg-indigo-600 text-white' : ($isLocked ? 'bg-gray-800 text-gray-600 cursor-not-allowed opacity-50' : 'bg-gray-800 text-gray-300 hover:bg-gray-700') }}">
                         Jogo {{ $index + 1 }}
@@ -337,7 +337,7 @@ new class extends Component
     />
 
     @if($match)
-    <div class="grid grid-cols-12 gap-4 h-0 flex-grow overflow-hidden">
+    <div class="grid grid-cols-12 gap-4 flex-grow min-h-0 overflow-hidden">
         <!-- BLUE SIDE -->
         <x-draft-team-panel 
             side="blue" 
@@ -400,20 +400,22 @@ new class extends Component
                     </div>
                 </div>
 
-                <div class="grid grid-cols-6 gap-2 h-0 flex-grow overflow-y-auto pr-2 custom-scrollbar content-start">
-                    @foreach($this->filteredChampions as $champ)
+                <div class="grid grid-cols-6 gap-2 flex-grow min-h-0 overflow-y-auto pr-2 custom-scrollbar content-start">
+                    @foreach($this->filteredChampions as $index => $champ)
                         @php
                             $isSelected = in_array($champ['id'], array_merge($match->blue_bans ?? [], $match->red_bans ?? [], $match->blue_picks ?? [], $match->red_picks ?? []));
                             $isFearlessBlocked = in_array($champ['id'], $this->fearlessBlockedChampions);
                             $isDisabled = $isSelected || $isFearlessBlocked || !$currentTurn;
                         @endphp
                         {{-- Wrapper com padding-bottom: 100% garante card quadrado independente da altura do grid --}}
-                        <div class="relative w-full" style="padding-bottom: 100%;">
+                        <div class="relative w-full" style="padding-bottom: 100%;" wire:key="champ-card-{{ $champ['id'] }}">
                             <div 
                                 @if(!$isDisabled) wire:click="selectChampion({{ $champ['id'] }})" @endif
+                                wire:loading.class="opacity-40 pointer-events-none"
+                                wire:target="selectChampion({{ $champ['id'] }})"
                                 class="absolute inset-0 rounded overflow-hidden border-2 transition-transform hover:scale-105 {{ $isDisabled ? 'opacity-30 cursor-not-allowed border-gray-800 pointer-events-none' : 'cursor-pointer ' . ($champ['is_priority'] ? 'border-yellow-500' : 'border-gray-700') }}"
                             >
-                                <img src="{{ $champ['image_url'] }}" alt="{{ $champ['name'] }}" class="absolute inset-0 w-full h-full object-cover {{ $isFearlessBlocked ? 'grayscale' : '' }}">
+                                <img src="{{ $champ['image_url'] }}" alt="{{ $champ['name'] }}" class="absolute inset-0 w-full h-full object-cover {{ $isFearlessBlocked ? 'grayscale' : '' }}" @if($index < 12) fetchpriority="high" @else loading="lazy" @endif>
                                 @if($champ['is_priority'])
                                     <div class="absolute top-1 right-1 text-yellow-500 z-10">
                                         <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z"></path></svg>

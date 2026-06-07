@@ -1,4 +1,4 @@
-FROM dunglas/frankenphp:1.2-php8.5
+FROM dunglas/frankenphp:php8.5-bookworm
 
 # Instalar o instalador de extensões do PHP da comunidade
 COPY --from=mlocati/php-extension-installer /usr/bin/install-php-extensions /usr/local/bin/
